@@ -230,7 +230,10 @@ textarea{resize:vertical;min-height:60px;}
 <div id="page-productos" class="page">
   <div class="ph">
     <div class="pt">Productos</div>
-    <div style="display:flex;gap:6px;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-s" style="font-size:11px;" onclick="descargarPlantillaCSV()">↓ Plantilla CSV</button>
+      <button class="btn btn-s" style="font-size:11px;" onclick="document.getElementById('csv-prod-input').click()">↑ Cargar CSV</button>
+      <input type="file" id="csv-prod-input" accept=".csv" style="display:none;" onchange="cargarCSVProductos(this)"/>
       <button class="btn btn-s" onclick="abrirScanner()">&#9641; Escanear</button>
       <button class="btn btn-p" onclick="openAddProd()">+ Agregar</button>
     </div>
@@ -288,7 +291,10 @@ textarea{resize:vertical;min-height:60px;}
 <div id="page-compra" class="page">
   <div class="ph">
     <div class="pt">Lista para Costco</div>
-    <button class="btn btn-s" onclick="copiarLista()">Copiar lista</button>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button class="btn btn-s" id="filtro-pedidos-btn" style="font-size:11px;padding:5px 10px;" onclick="toggleFiltroPedidos()">Solo con pedidos</button>
+      <button class="btn btn-s" onclick="copiarLista()">Copiar lista</button>
+    </div>
   </div>
   <div id="compra-list" class="compra-list"></div>
   <div style="background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:13px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;text-align:center;">
@@ -893,43 +899,87 @@ function renderCatalogo(){
         <div class="pc-sale" style="margin-bottom:2px;">$${p.precio.toFixed(2)}</div>
         <div style="font-size:10px;color:var(--mu);">${p.cat||''}</div>
       </div>
-      <div style="padding:0 7px 7px;">
-        <button class="btn btn-s" style="width:100%;font-size:11px;padding:4px;" onclick="descargarImgProd(${p.id})">Guardar imagen</button>
+      <div style="padding:0 7px 7px;display:flex;gap:5px;">
+        <button class="btn btn-s" style="flex:1;font-size:11px;padding:4px;" onclick="descargarImgProd(${p.id})">💾 Guardar</button>
+        <button class="btn btn-g" style="flex:1;font-size:11px;padding:4px;" onclick="compartirImgProd(${p.id})">📲 Compartir</button>
       </div>
     </div>`).join('');
 }
-function descargarImgProd(id){
+function generarCanvasProd(id,callback){
   const p=state.productos.find(x=>x.id===id);if(!p)return;
   const canvas=document.getElementById('canvas-prod');
   const W=600,H=700;canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#0f0f0f';ctx.fillRect(0,0,W,H);
   const drawTexto=()=>{
-    ctx.fillStyle='#e8f55a';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
-    ctx.fillText('La chica del Costco',W/2,H-190);
-    ctx.fillStyle='#f0f0f0';ctx.font='bold 22px sans-serif';
-    wrapText(ctx,p.nombre,W/2,H-155,W-40,28);
-    ctx.fillStyle='#e8f55a';ctx.font='bold 36px sans-serif';
-    ctx.fillText('$'+p.precio.toFixed(2),W/2,H-85);
-    ctx.fillStyle='#777';ctx.font='16px sans-serif';
-    ctx.fillText(p.cat||'',W/2,H-55);
-    if(state.viajeActual){ctx.fillStyle='#444';ctx.font='13px sans-serif';ctx.fillText(state.viajeActual.fecha,W/2,H-28);}
-    const url=canvas.toDataURL('image/jpeg',0.92);
-    const a=document.createElement('a');a.href=url;a.download=`${p.nombre.replace(/\s+/g,'-')}.jpg`;a.click();
-    toast('Imagen descargada');
+    // Fondo degradado inferior
+    const grad=ctx.createLinearGradient(0,340,0,H);
+    grad.addColorStop(0,'rgba(0,0,0,0)');grad.addColorStop(1,'rgba(0,0,0,0.92)');
+    ctx.fillStyle=grad;ctx.fillRect(0,340,W,H-340);
+    // Categoría
+    ctx.fillStyle='#777';ctx.font='500 15px Montserrat,sans-serif';ctx.textAlign='center';
+    ctx.fillText((p.cat||'').toUpperCase(),W/2,H-200);
+    // Nombre
+    ctx.fillStyle='#f0f0f0';ctx.font='bold 24px Montserrat,sans-serif';
+    wrapText(ctx,p.nombre,W/2,H-170,W-50,32);
+    // Precio
+    ctx.fillStyle='#e8f55a';ctx.font='bold 44px Montserrat,sans-serif';
+    ctx.fillText('$'+p.precio.toFixed(2),W/2,H-95);
+    // Línea separadora
+    ctx.strokeStyle='#2e2e2e';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(40,H-70);ctx.lineTo(W-40,H-70);ctx.stroke();
+    // Branding
+    ctx.fillStyle='#e8f55a';ctx.font='bold 14px Montserrat,sans-serif';
+    ctx.fillText('La chica del Costco',W/2,H-45);
+    if(state.viajeActual){
+      ctx.fillStyle='#444';ctx.font='12px Montserrat,sans-serif';
+      ctx.fillText(state.viajeActual.fecha,W/2,H-22);
+    }
+    callback(canvas);
   };
   if(p.foto){
     const img=new Image();img.onload=()=>{
-      const imgH=Math.round(W*img.height/img.width);const drawH=Math.min(imgH,460);
+      // Foto cubriendo la parte superior
+      const drawH=Math.min(Math.round(W*img.height/img.width),480);
       ctx.drawImage(img,0,0,W,drawH);
-      ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,drawH-30,W,30);
       drawTexto();
     };img.src=p.foto;
   }else{
     ctx.fillStyle='#1a1a1a';ctx.fillRect(0,0,W,460);
-    ctx.fillStyle='#444';ctx.font='80px sans-serif';ctx.textAlign='center';ctx.fillText('📦',W/2,260);
+    ctx.fillStyle='#333';ctx.font='90px sans-serif';ctx.textAlign='center';ctx.fillText('📦',W/2,270);
     drawTexto();
   }
+}
+function descargarImgProd(id){
+  const p=state.productos.find(x=>x.id===id);if(!p)return;
+  generarCanvasProd(id,(canvas)=>{
+    const url=canvas.toDataURL('image/jpeg',0.92);
+    const a=document.createElement('a');a.href=url;a.download=`${p.nombre.replace(/\s+/g,'-')}.jpg`;a.click();
+    toast('Imagen descargada');
+  });
+}
+async function compartirImgProd(id){
+  const p=state.productos.find(x=>x.id===id);if(!p)return;
+  if(!navigator.share||!navigator.canShare){
+    toast('Tu navegador no soporta compartir. Usa "Guardar" y comparte desde galería.');
+    return;
+  }
+  toast('Generando imagen…');
+  generarCanvasProd(id,async(canvas)=>{
+    canvas.toBlob(async(blob)=>{
+      if(!blob){toast('Error generando imagen');return;}
+      const file=new File([blob],[`${p.nombre.replace(/\s+/g,'-')}.jpg`],{type:'image/jpeg'});
+      const shareData={files:[file],title:p.nombre,text:`${p.nombre}  $${p.precio.toFixed(2)}`};
+      if(!navigator.canShare(shareData)){
+        toast('No se puede compartir imagen. Usa "Guardar" y comparte desde galería.');
+        return;
+      }
+      try{
+        await navigator.share(shareData);
+      }catch(e){
+        if(e.name!=='AbortError')toast('Error al compartir. Intenta guardar la imagen.');
+      }
+    },'image/jpeg',0.92);
+  });
 }
 function wrapText(ctx,text,x,y,maxW,lineH){
   const words=text.split(' ');let line='';
@@ -942,15 +992,15 @@ function wrapText(ctx,text,x,y,maxW,lineH){
 }
 function copiarMsgCatalogo(){
   const fecha=state.viajeActual?state.viajeActual.fecha:'Hoy';
-  let msg=`🛒 *Productos La chica del Costco — ${fecha}*\n\n`;
+  let msg=`*Productos Costco — ${fecha}*\n\n`;
   const porCat={};
   state.productos.forEach(p=>{if(!porCat[p.cat])porCat[p.cat]=[];porCat[p.cat].push(p);});
   Object.entries(porCat).forEach(([cat,prods])=>{
     msg+=`*${cat}*\n`;
-    prods.forEach(p=>{msg+=`• ${p.nombre} — *$${p.precio.toFixed(2)}*\n`;});
+    prods.forEach(p=>{msg+=`- ${p.nombre}  *$${p.precio.toFixed(2)}*\n`;});
     msg+='\n';
   });
-  msg+='Responde con tus pedidos 🙌';
+  msg+='Responde con tus pedidos :)';
   navigator.clipboard?.writeText(msg).then(()=>toast('Texto copiado para WhatsApp'));
 }
 function generarPDF(){
@@ -1004,7 +1054,7 @@ function generarPDF(){
           // Hipervínculo WhatsApp por producto
           const myNum=(state.perfil&&state.perfil.whatsapp)||'';
           if(myNum){
-            const waMsg=`Hola! Me interesa el producto: *${p.nombre}* — $${p.precio.toFixed(2)}`;
+            const waMsg=`Hola! Me interesa: *${p.nombre}*  $${p.precio.toFixed(2)}`;
             const waUrl='https://wa.me/'+myNum.replace(/\D/g,'')+`?text=${encodeURIComponent(waMsg)}`;
             doc.link(x,y,colW,rowH,{url:waUrl});
           }
@@ -1014,7 +1064,7 @@ function generarPDF(){
         // Hipervínculo WhatsApp por producto (sin foto)
         const myNum=(state.perfil&&state.perfil.whatsapp)||'';
         if(myNum){
-          const waMsg=`Hola! Me interesa el producto: *${p.nombre}* — $${p.precio.toFixed(2)}`;
+          const waMsg=`Hola! Me interesa: *${p.nombre}*  $${p.precio.toFixed(2)}`;
           const waUrl='https://wa.me/'+myNum.replace(/\D/g,'')+`?text=${encodeURIComponent(waMsg)}`;
           doc.link(x,y,colW,rowH,{url:waUrl});
         }
@@ -1084,38 +1134,36 @@ function eliminarCliente(id){
   state.clientes=state.clientes.filter(c=>c.id!==id);saveState();renderClis();renderDash();
 }
 function buildMsgWA(c){
-  const items = Object.entries(c.pedido)
+  const items=Object.entries(c.pedido)
     .map(([pid,qty])=>{
       const p=state.productos.find(p=>p.id==pid);
-      return p ? `  - ${p.nombre} x${qty}  =>  $${fmt(p.precio*qty)}` : null;
+      return p?`  - ${p.nombre} x${qty}  $${fmt(p.precio*qty)}`:null;
     }).filter(Boolean).join('\n');
-  const saldo = Math.max(0, c.total-(c.abono||0)-(c.pagado?c.total:0));
-  const fecha = state.viajeActual ? state.viajeActual.fecha : '';
-  const pf = state.perfil||{};
-  let msg = '';
-  msg += `Hola ${c.nombre}! Aqui esta el resumen de tu pedido La chica del Costco`;
-  if(fecha) msg += ` del ${fecha}`;
-  msg += `:\n\n`;
-  msg += `--- Pedido ---\n`;
-  msg += items + '\n\n';
-  msg += `*Total a pagar: $${fmt(c.total)}*\n`;
-  if((c.abono||0)>0 && !c.pagado){
-    msg += `Abono registrado: $${fmt(c.abono)}\n`;
-    msg += `*Saldo pendiente: $${fmt(saldo)}*\n`;
+  const saldo=Math.max(0,c.total-(c.abono||0)-(c.pagado?c.total:0));
+  const fecha=state.viajeActual?state.viajeActual.fecha:'';
+  const pf=state.perfil||{};
+  let msg='';
+  msg+=`Hola ${c.nombre}! Aqui esta el resumen de tu pedido`;
+  if(fecha)msg+=` del ${fecha}`;
+  msg+=`\n\n`;
+  msg+=`*Pedido:*\n${items}\n\n`;
+  msg+=`*Total: $${fmt(c.total)}*\n`;
+  if((c.abono||0)>0&&!c.pagado){
+    msg+=`Abono registrado: $${fmt(c.abono)}\n`;
+    msg+=`*Saldo pendiente: $${fmt(saldo)}*\n`;
   }
-  if(c.pago) msg += `Forma de pago: ${c.pago}\n`;
-  if(c.notas) msg += `\nNota: ${c.notas}\n`;
-  // Datos de pago del vendedor
-  const tieneDatosPago = pf.nombre||pf.banco||pf.cuenta||pf.clabe;
+  if(c.pago)msg+=`Forma de pago: ${c.pago}\n`;
+  if(c.notas)msg+=`\nNota: ${c.notas}\n`;
+  const tieneDatosPago=pf.nombre||pf.banco||pf.cuenta||pf.clabe;
   if(tieneDatosPago){
-    msg += `\n--- Datos para transferencia ---\n`;
-    if(pf.nombre)  msg += `Nombre: ${pf.nombre}\n`;
-    if(pf.banco)   msg += `Banco: ${pf.banco}\n`;
-    if(pf.cuenta)  msg += `No. de cuenta: ${pf.cuenta}\n`;
-    if(pf.clabe)   msg += `CLABE: ${pf.clabe}\n`;
+    msg+=`\n*Datos para transferencia:*\n`;
+    if(pf.nombre)msg+=`Nombre: ${pf.nombre}\n`;
+    if(pf.banco)msg+=`Banco: ${pf.banco}\n`;
+    if(pf.cuenta)msg+=`No. de cuenta: ${pf.cuenta}\n`;
+    if(pf.clabe)msg+=`CLABE: ${pf.clabe}\n`;
   }
-  msg += `\nMuchas gracias por tu compra! Cualquier duda con gusto te atiendo.`;
-  if(pf.nombre) msg += `\n\n${pf.nombre}`;
+  msg+=`\nGracias por tu compra! Cualquier duda con gusto te atiendo.`;
+  if(pf.nombre)msg+=`\n\n${pf.nombre}`;
   return msg;
 }
 
@@ -1240,33 +1288,117 @@ function renderDash(){
 }
 
 // ── COMPRA ────────────────────────────────────────────────────────────────────
+let filtroPedidos=false;
+function toggleFiltroPedidos(){
+  filtroPedidos=!filtroPedidos;
+  const btn=document.getElementById('filtro-pedidos-btn');
+  btn.style.background=filtroPedidos?'var(--ac)':'';
+  btn.style.color=filtroPedidos?'#0f0f0f':'';
+  btn.style.fontWeight=filtroPedidos?'700':'';
+  btn.textContent=filtroPedidos?'Todos los productos':'Solo con pedidos';
+  renderCompra();
+}
 function renderCompra(){
   const list=document.getElementById('compra-list');
-  if(!state.productos.length){list.innerHTML='<div class="empty"><div class="eicon">🛒</div><div class="etxt">Agrega productos primero</div></div>';['c-inv','c-venta','c-util'].forEach(id=>document.getElementById(id).textContent='$0');return;}
+  if(!state.productos.length){list.innerHTML='<div class="empty"><div class="eicon">&#128722;</div><div class="etxt">Agrega productos primero</div></div>';['c-inv','c-venta','c-util'].forEach(id=>document.getElementById(id).textContent='$0');return;}
   let inv=0,venta=0,util=0;
-  list.innerHTML=state.productos.map(p=>{
+  const rows=state.productos.map(p=>{
     const cant=state.clientes.reduce((s,c)=>s+(parseInt(c.pedido[p.id])||0),0);
     const si=cant*(p.costo||0),sv=cant*p.precio,su=sv-si;
     inv+=si;venta+=sv;util+=su;
-    return `<div class="compra-row">
+    return{p,cant,si,sv,su};
+  });
+  const filtradas=filtroPedidos?rows.filter(r=>r.cant>0):rows;
+  if(!filtradas.length){
+    list.innerHTML='<div class="empty"><div class="etxt">Ningún producto tiene pedidos aún</div></div>';
+  }else{
+    list.innerHTML=filtradas.map(({p,cant,su})=>`<div class="compra-row"${cant===0?' style="opacity:.45;"':''}>
       <div class="compra-prod">
-        ${p.foto?`<img class="compra-img" src="${p.foto}"/>`:`<div class="compra-ph">📦</div>`}
-        <div><div style="font-size:12px;font-weight:500;">${p.nombre}</div><div style="font-size:10px;color:var(--mu);">costo $${(p.costo||0).toFixed(2)} · venta $${p.precio.toFixed(2)}</div></div>
+        ${p.foto?`<img class="compra-img" src="${p.foto}"/>`:`<div class="compra-ph">&#128230;</div>`}
+        <div><div style="font-size:12px;font-weight:500;">${p.nombre}</div><div style="font-size:10px;color:var(--mu);">costo $${(p.costo||0).toFixed(2)} &middot; venta $${p.precio.toFixed(2)}</div></div>
       </div>
-      <div class="compra-right"><div class="compra-u">${cant}</div><div class="compra-util">+$${su.toFixed(2)}</div></div>
-    </div>`;
-  }).join('');
+      <div class="compra-right">
+        <div class="compra-u" style="${cant===0?'color:var(--mu);':''}">${cant===0?'—':cant}</div>
+        <div class="compra-util" style="${cant===0?'color:var(--mu2);':''}">${cant===0?'sin pedidos':'+$'+su.toFixed(2)}</div>
+      </div>
+    </div>`).join('');
+  }
   document.getElementById('c-inv').textContent='$'+fmt(inv);
   document.getElementById('c-venta').textContent='$'+fmt(venta);
   document.getElementById('c-util').textContent='$'+fmt(util);
 }
 function copiarLista(){
-  let txt=`Lista La chica del Costco — ${state.viajeActual?state.viajeActual.fecha:''}\n\n`;
-  state.productos.forEach(p=>{const cant=state.clientes.reduce((s,c)=>s+(parseInt(c.pedido[p.id])||0),0);if(cant>0)txt+=`• ${p.nombre}: ${cant} piezas\n`;});
+  const fecha=state.viajeActual?state.viajeActual.fecha:'';
+  let txt=`Lista Costco — ${fecha}\n\n`;
+  state.productos.forEach(p=>{
+    const cant=state.clientes.reduce((s,c)=>s+(parseInt(c.pedido[p.id])||0),0);
+    if(cant>0)txt+=`- ${p.nombre}: ${cant} piezas\n`;
+  });
   navigator.clipboard?.writeText(txt).then(()=>toast('Lista copiada'));
 }
 
-// ── GASTOS ────────────────────────────────────────────────────────────────────
+function descargarPlantillaCSV(){
+  const cols=['nombre','costo','precio','categoria','codigo_barras'];
+  const ejemplo=[
+    ['Aceite de oliva 2L','180','250','Despensa',''],
+    ['Detergente Kirkland','95','140','Limpieza',''],
+    ['Leche deslactosada 3L','65','95','Lacteos',''],
+  ];
+  const csv=[cols,...ejemplo].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='plantilla-productos-costco.csv';a.click();
+  toast('Plantilla descargada');
+}
+function cargarCSVProductos(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const texto=e.target.result.replace(/^\uFEFF/,''); // quitar BOM
+    const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+    if(lineas.length<2){toast('El archivo está vacío o sin datos');input.value='';return;}
+    // Detectar separador
+    const sep=lineas[0].includes(';')?';':',';
+    const parseFila=l=>{
+      const r=[];let cur='',dentro=false;
+      for(const ch of l){
+        if(ch==='"'){dentro=!dentro;}
+        else if(ch===sep&&!dentro){r.push(cur.trim());cur='';}
+        else cur+=ch;
+      }
+      r.push(cur.trim());return r;
+    };
+    const headers=parseFila(lineas[0]).map(h=>h.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''));
+    const idx={
+      nombre:headers.findIndex(h=>h.includes('nombre')),
+      costo:headers.findIndex(h=>h.includes('costo')),
+      precio:headers.findIndex(h=>h.includes('precio')),
+      cat:headers.findIndex(h=>h.includes('cat')||h.includes('categoria')),
+      bc:headers.findIndex(h=>h.includes('barr')||h.includes('codigo')||h.includes('bc')),
+    };
+    if(idx.nombre<0||idx.precio<0){
+      toast('El CSV debe tener columnas "nombre" y "precio"');input.value='';return;
+    }
+    let agregados=0,omitidos=0;
+    lineas.slice(1).forEach(linea=>{
+      if(!linea.trim())return;
+      const cols=parseFila(linea);
+      const nombre=(cols[idx.nombre]||'').trim();
+      const precio=parseFloat(cols[idx.precio]);
+      if(!nombre||isNaN(precio)||precio<=0){omitidos++;return;}
+      const costo=idx.costo>=0?parseFloat(cols[idx.costo])||0:0;
+      const cat=idx.cat>=0?(cols[idx.cat]||'Despensa').trim()||'Despensa':'Despensa';
+      const barcode=idx.bc>=0?(cols[idx.bc]||'').trim()||null:null;
+      // Evitar duplicados por nombre exacto
+      if(state.productos.find(p=>p.nombre.toLowerCase()===nombre.toLowerCase())){omitidos++;return;}
+      state.productos.push({id:Date.now()+Math.random(),nombre,costo,precio,cat,barcode:barcode,foto:null});
+      agregados++;
+    });
+    saveState();renderProds();input.value='';
+    toast(`${agregados} productos importados${omitidos>0?` (${omitidos} omitidos)`:''}`)
+  };
+  reader.readAsText(file,'UTF-8');
+}
 function openAddGasto(catPre,montoPre){
   document.getElementById('mgasto-title').textContent='Registrar gasto';
   document.getElementById('gasto-eid').value='';
@@ -1464,12 +1596,18 @@ function abrirWAHistorial(vIdx,cId){
   const v=state.historial[vIdx];if(!v)return;
   const c=v.clientes.find(x=>x.id===cId);if(!c)return;
   const items=Object.entries(c.pedido).map(([pid,qty])=>{
-    const p=v.productos.find(p=>p.id==pid);return p?`  - ${p.nombre} x${qty}  =>  $${fmt(p.precio*qty)}`:null;
+    const p=v.productos.find(p=>p.id==pid);return p?`  - ${p.nombre} x${qty}  $${fmt(p.precio*qty)}`:null;
   }).filter(Boolean).join('\n');
   const pf=state.perfil||{};
-  let msg=`Hola ${c.nombre}! Aqui esta el resumen de tu pedido La chica del Costco del ${v.fecha}:\n\n`;
-  msg+=`--- Pedido ---\n${items}\n\n*Total: $${fmt(c.total)}*\n`;
-  if(pf.nombre||pf.banco)msg+=`\n--- Datos para transferencia ---\n${pf.nombre?'Nombre: '+pf.nombre+'\n':''}${pf.banco?'Banco: '+pf.banco+'\n':''}${pf.cuenta?'No. cuenta: '+pf.cuenta+'\n':''}${pf.clabe?'CLABE: '+pf.clabe+'\n':''}`;
+  let msg=`Hola ${c.nombre}! Aqui esta el resumen de tu pedido del ${v.fecha}:\n\n`;
+  msg+=`*Pedido:*\n${items}\n\n*Total: $${fmt(c.total)}*\n`;
+  if(pf.nombre||pf.banco){
+    msg+=`\n*Datos para transferencia:*\n`;
+    if(pf.nombre)msg+=`Nombre: ${pf.nombre}\n`;
+    if(pf.banco)msg+=`Banco: ${pf.banco}\n`;
+    if(pf.cuenta)msg+=`No. cuenta: ${pf.cuenta}\n`;
+    if(pf.clabe)msg+=`CLABE: ${pf.clabe}\n`;
+  }
   const tel=c.tel?c.tel.replace(/\D/g,''):'';
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
 }
@@ -1582,15 +1720,15 @@ function buildMsgCatalogoSeleccionado(){
   const selProds=state.productos.filter(p=>selIds.includes(p.id));
   if(!selProds.length){toast('Selecciona al menos un producto','#f55a5a');return null;}
   const fecha=state.viajeActual?state.viajeActual.fecha:'Hoy';
-  let msg=`🛒 *Productos La chica del Costco — ${fecha}*\n\n`;
+  let msg=`*Productos Costco — ${fecha}*\n\n`;
   const porCat={};
   selProds.forEach(p=>{if(!porCat[p.cat])porCat[p.cat]=[];porCat[p.cat].push(p);});
   Object.entries(porCat).forEach(([cat,prods])=>{
     msg+=`*${cat}*\n`;
-    prods.forEach(p=>{msg+=`• ${p.nombre} — *$${p.precio.toFixed(2)}*\n`;});
+    prods.forEach(p=>{msg+=`- ${p.nombre}  *$${p.precio.toFixed(2)}*\n`;});
     msg+='\n';
   });
-  msg+='Responde con tus pedidos 🙌';
+  msg+='Responde con tus pedidos :)';
   return msg;
 }
 function copiarCatalogoSeleccionado(){
@@ -1650,10 +1788,10 @@ function guardarRegistro(){
 }
 function enviarRepartidorWA(id){
   const r=state.registros.find(x=>x.id===id);if(!r)return;
-  let msg=`📦 *Datos de entrega*\n\n`;
+  let msg=`*Datos de entrega*\n\n`;
   msg+=`*Cliente:* ${r.nombre}\n`;
   if(r.tel)msg+=`*WhatsApp:* ${r.tel}\n`;
-  if(r.ubicacion)msg+=`*Dirección:* ${r.ubicacion}\n`;
+  if(r.ubicacion)msg+=`*Direccion:* ${r.ubicacion}\n`;
   if(r.referencia)msg+=`*Referencia:* ${r.referencia}\n`;
   if(r.notas)msg+=`*Notas:* ${r.notas}\n`;
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
