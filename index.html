@@ -159,7 +159,21 @@ textarea{resize:vertical;min-height:60px;}
 .abono-row{background:var(--sf2);border-radius:var(--r2);padding:8px 11px;margin-bottom:10px;}
 .abono-bar{height:5px;border-radius:99px;background:var(--bd);margin-top:6px;overflow:hidden;}
 .abono-fill{height:100%;border-radius:99px;background:var(--ac2);transition:width .3s;}
-/* Registro clientes */
+/* Client chip selector */
+.cli-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:99px;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;white-space:nowrap;}
+.cli-chip:active,.cli-chip.sel{background:var(--ac);color:#0f0f0f;border-color:var(--ac);}
+.cli-chip .chip-tel{font-size:10px;opacity:.65;}
+/* Product stepper row */
+.pcr{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--bd);}
+.pcr:last-child{border-bottom:none;}
+.pcr-info{flex:1;min-width:0;}
+.pcr-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pcr-price{font-size:10px;color:var(--mu);}
+.stepper{display:flex;align-items:center;gap:0;flex-shrink:0;}
+.stp-btn{width:32px;height:32px;border-radius:99px;border:1px solid var(--bd);background:var(--sf2);color:var(--tx);font-size:18px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;line-height:1;flex-shrink:0;}
+.stp-btn:active{background:var(--ac);color:#0f0f0f;border-color:var(--ac);}
+.stp-btn.plus:active{background:var(--ac2);}
+.stp-val{width:32px;text-align:center;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--ac);}
 .rc-row{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r2);padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;}
 .rc-info{flex:1;}
 .rc-name{font-size:14px;font-weight:500;margin-bottom:2px;}
@@ -503,15 +517,27 @@ textarea{resize:vertical;min-height:60px;}
 
 <!-- MODAL CLIENTE -->
 <div class="mo" id="m-cli">
-  <div class="md">
+  <div class="md" style="max-width:520px;">
     <div class="mt">Registrar pedido</div>
-    <label>Nombre</label><input type="text" id="cli-nombre" placeholder="Ej: María López"/>
-    <label>WhatsApp (con código país)</label><input type="tel" id="cli-tel" placeholder="529611234567"/>
-    <label>Notas del pedido</label><textarea id="cli-notas" placeholder="Ej: Entregar en la tarde, piso 2…"></textarea>
-    <label>Productos y cantidades</label>
-    <div class="pcl" id="pcl"></div>
-    <label>Método de pago</label>
-    <select id="cli-pago"><option value="Efectivo">Efectivo al entregar</option><option value="SPEI">Transferencia SPEI</option><option value="Otro">Otro</option></select>
+
+    <!-- Selector de cliente registrado -->
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;">Cliente</div>
+      <div id="cli-reg-lista" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;max-height:110px;overflow-y:auto;"></div>
+      <input type="text" id="cli-nombre" placeholder="O escribe un nombre nuevo…" oninput="onCliNombreInput()" style="margin-bottom:5px;"/>
+      <input type="tel" id="cli-tel" placeholder="WhatsApp (con código país) ej: 529611234567" style="margin-bottom:0;"/>
+    </div>
+
+    <!-- Notas y pago -->
+    <textarea id="cli-notas" placeholder="Notas del pedido (opcional)" style="height:52px;margin-bottom:8px;"></textarea>
+    <select id="cli-pago" style="margin-bottom:10px;"><option value="Efectivo">Efectivo al entregar</option><option value="SPEI">Transferencia SPEI</option><option value="Otro">Otro</option></select>
+
+    <!-- Productos -->
+    <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Productos y cantidades</div>
+    <input type="text" id="pcl-buscar" placeholder="Buscar producto…" oninput="filtrarPCL()" style="margin-bottom:8px;"/>
+    <div class="pcl" id="pcl" style="max-height:340px;overflow-y:auto;"></div>
+
+    <!-- Totales -->
     <div style="background:var(--sf2);border-radius:var(--r2);padding:9px 11px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:7px;">
       <div><div style="font-size:10px;color:var(--mu);text-transform:uppercase;margin-bottom:2px;">Total</div><div style="font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;color:var(--ac);" id="cli-tot">$0</div></div>
       <div><div style="font-size:10px;color:var(--mu);text-transform:uppercase;margin-bottom:2px;">Tu ganancia</div><div style="font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;color:var(--ac2);" id="cli-util">$0</div></div>
@@ -1081,14 +1107,73 @@ function openAddCliente(){
   document.getElementById('cli-nombre').value='';
   document.getElementById('cli-tel').value='';
   document.getElementById('cli-notas').value='';
+  document.getElementById('cli-pago').value='Efectivo';
   document.getElementById('cli-tot').textContent='$0';
   document.getElementById('cli-util').textContent='$0';
-  document.getElementById('pcl').innerHTML=state.productos.map(p=>`
-    <div class="pcr">
-      <div><div style="font-size:12px;font-weight:500;">${p.nombre}</div><div style="font-size:10px;color:var(--mu);">$${p.precio.toFixed(2)} · gan $${ganUnit(p).toFixed(2)}</div></div>
-      <input type="number" class="qi" min="0" max="99" value="0" data-id="${p.id}" data-precio="${p.precio}" data-costo="${p.costo||0}" oninput="recalcTot()"/>
-    </div>`).join('');
+  document.getElementById('pcl-buscar').value='';
+  // Render client chips from registros
+  const chips=document.getElementById('cli-reg-lista');
+  if(state.registros&&state.registros.length){
+    chips.innerHTML=state.registros.map(r=>`
+      <div class="cli-chip" id="chip-${r.id}" onclick="seleccionarChip(${r.id})">
+        <span>${r.nombre}</span>${r.tel?`<span class="chip-tel">${r.tel}</span>`:''}
+      </div>`).join('');
+    chips.style.display='flex';
+  }else{
+    chips.innerHTML='<span style="font-size:11px;color:var(--mu2);">Sin clientes registrados aún</span>';
+    chips.style.display='flex';
+  }
+  renderPCL();
   openModal('m-cli');
+}
+function seleccionarChip(id){
+  const r=state.registros.find(x=>x.id===id);if(!r)return;
+  // Deselect all chips
+  document.querySelectorAll('.cli-chip').forEach(c=>c.classList.remove('sel'));
+  document.getElementById('chip-'+id).classList.add('sel');
+  document.getElementById('cli-nombre').value=r.nombre;
+  document.getElementById('cli-tel').value=r.tel||'';
+}
+function onCliNombreInput(){
+  // Deselect chips if user types manually
+  document.querySelectorAll('.cli-chip').forEach(c=>c.classList.remove('sel'));
+}
+function renderPCL(filtro=''){
+  const pcl=document.getElementById('pcl');
+  const prods=filtro?state.productos.filter(p=>p.nombre.toLowerCase().includes(filtro.toLowerCase())):state.productos;
+  pcl.innerHTML=prods.map(p=>{
+    const cur=parseInt(document.querySelector(`.qi[data-id="${p.id}"]`)?.value)||0;
+    return `<div class="pcr" id="pcr-${p.id}">
+      <div class="pcr-info">
+        ${p.foto?`<img src="${p.foto}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;float:left;margin-right:7px;"/>`:''}
+        <div class="pcr-name">${p.nombre}</div>
+        <div class="pcr-price">$${p.precio.toFixed(2)} &middot; gan $${ganUnit(p).toFixed(2)}</div>
+      </div>
+      <div class="stepper">
+        <button class="stp-btn minus" onclick="stepProd(${p.id},-1)">−</button>
+        <div class="stp-val" id="sv-${p.id}">${cur||0}</div>
+        <input type="hidden" class="qi" data-id="${p.id}" data-precio="${p.precio}" data-costo="${p.costo||0}" value="${cur||0}"/>
+        <button class="stp-btn plus" onclick="stepProd(${p.id},1)">+</button>
+      </div>
+    </div>`;
+  }).join('')||'<div style="padding:10px;font-size:12px;color:var(--mu);">Sin resultados</div>';
+}
+function filtrarPCL(){
+  const q=document.getElementById('pcl-buscar').value;
+  renderPCL(q);
+}
+function stepProd(id,delta){
+  const inp=document.querySelector(`.qi[data-id="${id}"]`);
+  if(!inp)return;
+  const cur=parseInt(inp.value)||0;
+  const nuevo=Math.max(0,Math.min(99,cur+delta));
+  inp.value=nuevo;
+  document.getElementById('sv-'+id).textContent=nuevo;
+  document.getElementById('sv-'+id).style.color=nuevo>0?'var(--ac)':'var(--mu)';
+  // Highlight row if has qty
+  const row=document.getElementById('pcr-'+id);
+  if(row)row.style.background=nuevo>0?'rgba(232,245,90,0.05)':'';
+  recalcTot();
 }
 function recalcTot(){
   let tot=0,util=0;
